@@ -14,29 +14,23 @@ type FeedInfo struct {
 }
 
 type RSSRoot struct {
-	XMLName xml.Name   `xml:"rss"`
-	Channel RSSChannel `xml:"channel"`
-}
-
-type RSSChannel struct {
-	Title string `xml:"title"`
-	Items []struct {
+	XMLName xml.Name `xml:"rss"`
+	Channel struct {
 		Title string `xml:"title"`
-	} `xml:"item"`
+		Items []struct {
+			Title string `xml:"title"`
+		} `xml:"item"`
+	} `xml:"channel"`
 }
 
 type AtomFeed struct {
-	XMLName xml.Name    `xml:"feed"`
-	Title   AtomText    `xml:"title"`
-	Entries []AtomEntry `xml:"entry"`
-}
-
-type AtomText struct {
-	Text string `xml:",chardata"`
-}
-
-type AtomEntry struct {
-	Title string `xml:"title"`
+	XMLName xml.Name `xml:"feed"`
+	Title   struct {
+		Text string `xml:",chardata"`
+	} `xml:"title"`
+	Entries []struct {
+		Title string `xml:"title"`
+	} `xml:"entry"`
 }
 
 type HTMLLink struct {

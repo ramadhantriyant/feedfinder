@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"mime"
-	"net/http"
 	"net/url"
 	"os"
 	"slices"
@@ -41,8 +40,8 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("server returned HTTP %d", resp.StatusCode)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("server returned HTTP %s", resp.Status)
 	}
 
 	effectiveURL := resp.Request.URL.String()
@@ -56,7 +55,11 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 	logf("Content-Type: %s", ct)
 	if mediaType, _, err := mime.ParseMediaType(ct); err == nil && feed.IsFeedMIME(mediaType) {
 		logf("URL is itself a feed (Content-Type: %s)", mediaType)
-		info, _ := feed.ParseInfo(resp.Body)
+		info, err := feed.ParseInfo(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse feed: %w", err)
+		}
+
 		results = append(results, model.FeedResult{
 			URL:    effectiveURL,
 			Source: "Content-Type header (" + mediaType + ")",
@@ -73,12 +76,12 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 	body := string(bodyBytes)
 
 	logf("Scanning HTML for <link> tags")
-	links := ExtractLinkTags(body)
+	links := extractLinkTags(body)
 	logf("Found %d <link> tags", len(links))
 
 	for _, link := range links {
-		isAlternate := HasToken(link.Rel, "alternate")
-		isSelf := HasToken(link.Rel, "self")
+		isAlternate := hasToken(link.Rel, "alternate")
+		isSelf := hasToken(link.Rel, "self")
 		if !isAlternate && !isSelf {
 			continue
 		}
@@ -87,7 +90,7 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 			continue
 		}
 
-		resolved := ResolveURL(base, link.Href)
+		resolved := resolveURL(base, link.Href)
 		if resolved == "" {
 			continue
 		}
@@ -133,7 +136,7 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 
 	logf("Probing %d common feed paths", len(commonPaths))
 	for _, path := range commonPaths {
-		candidate := ResolveURL(base, path)
+		candidate := resolveURL(base, path)
 		if candidate == "" {
 			continue
 		}
@@ -150,116 +153,4 @@ func Discover(rawURL, userAgent string, timeout time.Duration, verbose bool) ([]
 	}
 
 	return results, nil
-}
-
-func isValidFeed(c *http.Client, feedURL, userAgent string) (model.FeedInfo, bool) {
-	resp, err := client.DoRequest(c, feedURL, userAgent)
-	if err != nil {
-		return model.FeedInfo{}, false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return model.FeedInfo{}, false
-	}
-	info, err := feed.ParseInfo(resp.Body)
-	if err != nil {
-		return model.FeedInfo{}, false
-	}
-	return info, info.HasItems || info.Title != ""
-}
-
-func ExtractLinkTags(body string) []model.HTMLLink {
-	var links []model.HTMLLink
-
-	lower := strings.ToLower(body)
-	start := 0
-
-	for {
-		idx := strings.Index(lower[start:], "<link")
-		if idx < 0 {
-			break
-		}
-		idx += start
-
-		end := strings.IndexAny(lower[idx:], ">")
-		if end < 0 {
-			break
-		}
-		end += idx + 1
-
-		tag := body[idx:end]
-		link := parseTagAttrs(tag)
-		if link.Href != "" {
-			links = append(links, link)
-		}
-		start = end
-	}
-
-	return links
-}
-
-func parseTagAttrs(tag string) model.HTMLLink {
-	var link model.HTMLLink
-	lower := strings.ToLower(tag)
-
-	link.Rel = attrValue(lower, tag, "rel")
-	link.Type = attrValue(lower, tag, "type")
-	link.Href = attrValue(lower, tag, "href")
-	return link
-}
-
-func attrValue(lowerTag, origTag, attr string) string {
-	needle := attr + "="
-	idx := strings.Index(lowerTag, needle)
-	if idx < 0 {
-		return ""
-	}
-	idx += len(needle)
-	if idx >= len(origTag) {
-		return ""
-	}
-	rest := origTag[idx:]
-	if len(rest) == 0 {
-		return ""
-	}
-	var val string
-	if rest[0] == '"' || rest[0] == '\'' {
-		q := rest[0]
-		end := strings.IndexByte(rest[1:], q)
-		if end < 0 {
-			return ""
-		}
-		val = rest[1 : end+1]
-	} else {
-		end := strings.IndexAny(rest, " \t\r\n>")
-		if end < 0 {
-			val = rest
-		} else {
-			val = rest[:end]
-		}
-	}
-	return strings.TrimSpace(val)
-}
-
-func HasToken(list, token string) bool {
-	list = strings.ToLower(strings.TrimSpace(list))
-	token = strings.ToLower(token)
-	for t := range strings.FieldsSeq(list) {
-		if t == token {
-			return true
-		}
-	}
-	return false
-}
-
-func ResolveURL(base *url.URL, href string) string {
-	href = strings.TrimSpace(href)
-	if href == "" {
-		return ""
-	}
-	parsed, err := url.Parse(href)
-	if err != nil {
-		return ""
-	}
-	return base.ResolveReference(parsed).String()
 }

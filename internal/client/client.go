@@ -30,6 +30,7 @@ func DoRequest(client *http.Client, targetURL, userAgent string) (*http.Response
 		ua = "Mozilla/5.0 (compatible; FeedFinder/1.0)"
 	}
 
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("User-Agent", ua)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml,application/rss+xml,application/atom+xml;q=0.9,*/*;q=0.8")
 

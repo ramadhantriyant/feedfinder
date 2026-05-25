@@ -9,7 +9,7 @@ import (
 	"github.com/ramadhantriyant/feedfinder/internal/discovery"
 )
 
-const (
+var (
 	colReset  = "\033[0m"
 	colBold   = "\033[1m"
 	colGreen  = "\033[32m"
@@ -27,7 +27,7 @@ func main() {
 		noColor    = flag.Bool("no-color", false, "Disable coloured output")
 	)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, colBold+"feedfinder"+colReset+" — discover RSS/Atom/JSON feeds from a URL\n\n")
+		fmt.Fprint(os.Stderr, colBold+"feedfinder"+colReset+" - discover RSS/Atom/JSON feeds from a URL\n\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n  feedfinder [flags] <url>\n\nFlags:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
@@ -43,11 +43,13 @@ func main() {
 	}
 	rawURL := flag.Arg(0)
 
-	_ = *noColor // color disabling not fully implemented; escapes still emitted
+	if *noColor {
+		colReset, colBold, colGreen, colYellow, colCyan, colRed, colGray = "", "", "", "", "", "", ""
+	}
 
 	timeout := time.Duration(*timeoutSec) * time.Second
 
-	fmt.Printf("\n%s%s feedfinder%s — scanning %s%s%s\n\n",
+	fmt.Printf("\n%s%s feedfinder%s - scanning %s%s%s\n\n",
 		colBold, colCyan, colReset,
 		colBold, rawURL, colReset)
 
